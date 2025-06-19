@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gemini Chat</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .code-block {
+      background: #eee;
+      border-radius: 8px;
+      margin: 10px 0;
+      position: relative;
+      padding: 12px 16px;
+      font-family: Consolas, monospace;
+    }
+    .code-block pre {
+      margin: 0;
+      overflow-x: auto;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #00ff88;
+      border: none;
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      background: #00e07a;
+    }
+    code {
+      font-family: Consolas, monospace;
+    }
+    .bubble {
+      padding: 12px 18px;
+      margin: 10px;
+      border-radius: 10px;
+      max-width: 80%;
+      line-height: 1.5;
+      word-wrap: break-word;
+      font-size: 16px;
+    }
+    .bubble.user {
+      background: #00ff88cc;
+      color: #000;
+      align-self: flex-end;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+      border-bottom-left-radius: 10px;
+      border-bottom-right-radius: 0;
+    }
+    .bubble.ai {
+      background: #ffffffcc;
+      color: #111;
+      align-self: flex-start;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+      border-bottom-right-radius: 10px;
+      border-bottom-left-radius: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="chat"></div>
+    <div id="inputArea">
+      <input id="userInput" placeholder="Zadaj pytanie..." />
+      <button id="sendBtn" onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+
+  <script>
+    const API_KEY = "AIzaSyDyHYVknwOzZdrzcgcgjG6jM0ZkVQpnxZQ";
+    const conversation = [];
+
+    async function sendMessage() {
+      const input = document.getElementById("userInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendMessage(text, "user");
+      conversation.push({ parts: [{ text }], role: "user" });
+      input.value = "";
+
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: conversation })
+          }
+        );
+
+        const data = await response.json();
+        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "🤖 Nie mogę odpowiedzieć...";
+        await typeMessage(aiText, "ai");
+        conversation.push({ parts: [{ text: aiText }], role: "model" });
+
+      } catch (err) {
+        console.error("❌ Błąd Gemini:", err);
+        appendMessage("(Błąd odpowiedzi API)", "ai");
+      }
+    }
+
+    function appendMessage(text, type) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.className = `bubble ${type}`;
+      div.innerHTML = formatText(text);
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function typeMessage(text, type) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.className = `bubble ${type}`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+
+      for (let i = 0; i <= text.length; i++) {
+        div.innerHTML = formatText(text.substring(0, i));
+        await new Promise(resolve => setTimeout(resolve, 15));
+        chat.scrollTop = chat.scrollHeight;
+      }
+    }
+
+    function formatText(text) {
+      text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+      text = text.replace(/\*(.*?)\*/g, "<em>$1</em>");
+      text = text.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+      text = text.replace(/```([\s\S]*?)```/g, (match, code) => {
+        const escaped = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return `<div class='code-block'><button class='copy-btn' onclick='copyCode(this)'>Kopiuj</button><pre><code>${escaped}</code></pre></div>`;
+      });
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+      return text;
+    }
+
+    function copyCode(button) {
+      const code = button.parentElement.querySelector("code").innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        button.innerText = "Skopiowano!";
+        setTimeout(() => button.innerText = "Kopiuj", 2000);
+      });
+    }
+
+    document.getElementById("userInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
